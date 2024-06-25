@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -17,24 +18,31 @@ const (
 	green   = lipgloss.Color("#077B8A")
 )
 
+type WebsocketReqResp struct {
+	inputstr  string
+	outputstr string
+}
+
+const websocketEndpoint string = "wss://echo.websocket.org"
+
 var (
 	userinputPaneStyle = lipgloss.NewStyle().
 				Width(60).
-				Height(5).
+				Height(1).
 				Align(lipgloss.Center, lipgloss.Left).
 				BorderStyle(lipgloss.NormalBorder()).
 				BorderForeground(lipgloss.Color("69"))
 
 	leftPaneStyle = lipgloss.NewStyle().
 			Width(60).
-			Height(25).
-			Align(lipgloss.Center, lipgloss.Center).
+			Height(29).
+			Align(lipgloss.Left, lipgloss.Top).
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("69"))
 
 	rightPaneStyle = lipgloss.NewStyle().
 			Width(60).
-			Height(30).
+			Height(32).
 			Align(lipgloss.Left, lipgloss.Center).
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("69"))
@@ -58,6 +66,8 @@ type model struct {
 	dockeruserinput   textinput.Model
 	err               error
 	dockerhubresponse DockerHubResponse
+	websocketConn     *websocket.Conn
+	websocketmessages []WebsocketReqResp
 }
 
 func getDockerHubDetails(dockerUsername string) tea.Cmd {
@@ -82,6 +92,27 @@ func getDockerHubDetails(dockerUsername string) tea.Cmd {
 		json.Unmarshal(responseData, &dockerHubResponse)
 
 		return dockerHubResponse
+	}
+}
+
+func (m model) sendAndReceiveWebsocketMsg(inputCommand string) tea.Cmd {
+	return func() tea.Msg {
+		err := m.websocketConn.WriteMessage(websocket.TextMessage, []byte(inputCommand))
+
+		if err != nil {
+			return errMsg{err}
+		}
+
+		_, message, err := m.websocketConn.ReadMessage()
+
+		if err != nil {
+			return errMsg{err}
+		}
+
+		return WebsocketReqResp{
+			inputstr:  inputCommand,
+			outputstr: string(message),
+		}
 	}
 }
 
